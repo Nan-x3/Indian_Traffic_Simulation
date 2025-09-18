@@ -42,27 +42,34 @@ def main():
     vehicle_spawner.set_spawn_rate(0.8)
     vehicle_spawner.set_max_vehicles(100)
     
-    # --- CHANGE WAS HERE ---
-    # vehicle_spawner.enable_spawning() # <-- This line is commented out. Spawning is now OFF by default.
+    # --- VEHICLE SPAWNING SETUP ---
+    # vehicle_spawner.enable_spawning() # <-- Uncomment this line to start with vehicles enabled
     
     # Setup traffic light system
     print("Setting up traffic light system...")
     traffic_light_manager = TrafficLightManager()
     traffic_light = traffic_light_manager.add_traffic_light(960, 540, current_config, intersection_size=120)
     
+    print("Traffic lights are now running! (15-second cycles)")
+    print("Press V to enable vehicle spawning when ready.")
+    
     # Main loop
     running = True
     show_info = True
     show_debug = False
     
-    print("\nTraffic Simulation Controls:")
-    print("- ESC: Exit")
+    print("\nTraffic Simulation Started!")
+    print("🚦 Traffic lights are cycling automatically (15s green, no yellow)")
+    print("🚗 Vehicle spawning is OFF - press V to enable cars")
+    print("\nControls:")
+    print("- ESC: Exit simulation")
     print("- V: Toggle vehicle spawning on/off")
     print("- C: Clear all vehicles")
     print("- I: Toggle info display")
     print("- D: Toggle debug lane visualization")
     print("- R: Reset vehicle spawning with current road config")
     print("- GUI window allows real-time road configuration")
+    print("\nSimulation running... Press V when ready for vehicles!")
     
     while running:
         dt = clock.tick(60) / 1000.0
@@ -123,9 +130,15 @@ def main():
             lane_count = current_config['lane_count']
             road_info = f"Road: {junction_type} | {road_type} | {lane_count} Lanes"
             
+            # Get traffic light timing info
+            timer_info = traffic_light.get_timer_info()
+            current_green = timer_info['current_green']
+            time_remaining = timer_info['time_remaining']
+            traffic_info = f"Traffic Light: {current_green} Green | Next Change: {time_remaining:.1f}s"
+            
             controls_info = "Controls: V=Toggle Spawning | C=Clear | I=Info | D=Debug | R=Reset | ESC=Exit"
             
-            for text in [vehicle_info, road_info, controls_info]:
+            for text in [vehicle_info, road_info, traffic_info, controls_info]:
                 text_surface = font.render(text, True, (255, 255, 255))
                 screen.blit(text_surface, (50, y_offset))
                 y_offset += 40
