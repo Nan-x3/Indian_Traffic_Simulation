@@ -11,6 +11,7 @@ import time
 # Import our libraries
 import road_config
 import vehicle_spawnconfig
+from traffic_lights import TrafficLightManager
 
 def main():
     """Main traffic simulation program with vehicles"""
@@ -41,6 +42,12 @@ def main():
     vehicle_spawner.set_spawn_rate(0.8)  # Slower spawning to prevent overlaps
     vehicle_spawner.set_max_vehicles(100)  # Reduced vehicle count for better spacing
     vehicle_spawner.enable_spawning()
+    
+    # Setup traffic light system
+    print("Setting up traffic light system...")
+    traffic_light_manager = TrafficLightManager()
+    # Add traffic light at the intersection center (960, 540 for 1920x1080 screen)
+    traffic_light = traffic_light_manager.add_traffic_light(960, 540, current_config, intersection_size=120)
     
     # Main loop
     running = True
@@ -99,11 +106,18 @@ def main():
         current_config = road_config.get_current_config()
         road_renderer.update_config(current_config)
         
+        # Update traffic lights with current road configuration
+        traffic_light_manager.update_road_config(current_config)
+        
         # Draw complete road system
         road_renderer.draw_complete_road_system(screen)
         
-        # Update and draw vehicles
-        vehicle_spawner.update_vehicles(dt, current_time, current_config)
+        # Update and draw traffic lights
+        traffic_light_manager.update_all()
+        traffic_light_manager.draw_all(screen)
+        
+        # Update and draw vehicles (now with traffic light awareness)
+        vehicle_spawner.update_vehicles(dt, current_time, current_config, traffic_light_manager)
         vehicle_spawner.draw_vehicles(screen)
         
         # Draw debug visualization if enabled
