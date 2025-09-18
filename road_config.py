@@ -7,7 +7,7 @@ import threading
 import math
 
 # ============================================================================
-# CLASS DEFINITIONS (Must be defined before they are used)
+# CLASS DEFINITIONS
 # ============================================================================
 
 class ConfigPanel:
@@ -29,7 +29,7 @@ class ConfigPanel:
         self.config_frame.pack(fill="x", padx=10, pady=5)
         self.config_display = ttk.Label(self.config_frame, text="Default", wraplength=380)
         self.config_display.pack(anchor="w")
-        self.apply_config() # Apply default config on startup
+        self.apply_config()
 
     def run(self):
         self.window.mainloop()
@@ -108,7 +108,7 @@ class ConfigPanel:
         self.bottom_angle_entry.bind('<Return>', lambda e: self.validate_angle(e, self.bottom_angle))
         
     def validate_t_angle(self, event=None):
-        self.validate_angle_range(self.t_angle, 30, 150)
+        self.validate_angle(self.t_angle, 30, 150)
     
     def validate_angle(self, var, min_val=0, max_val=360):
         try:
@@ -129,10 +129,8 @@ class ConfigPanel:
         road_type = self.road_type.get()
         info = ""
         if road_type == "1way": info = f"{count} lanes: all same direction"
-        elif road_type == "2way_with_divider":
-            info = f"{count} lanes: {count//2} each way (divider)" if count > 1 else "1 lane: not valid"
-        else:
-            info = f"{count} lanes: ~{count//2} each way (no divider)"
+        elif "2way" in road_type:
+            info = f"{count} lanes: {count//2} each way" if count > 1 else "1 lane: not valid for 2-way"
         self.lane_info.config(text=info)
         
     def apply_config(self):
@@ -189,18 +187,24 @@ class RoadRenderer:
         return {'lane_width': lane_width, 'total_lanes': total_lanes, 'road_width': road_width,
                 'lanes_per_direction': lanes_per_dir, 'road_half_width': road_width // 2}
     
+    # --- FIX WAS HERE ---
     def draw_roads(self, screen, center_x=960, center_y=540):
         dims = self.get_road_dimensions()
-        road_width, half_width = dims['road_width'], dims['road_half_width']
+        half_width = dims['road_half_width']
         
         if self.config['junction_type'] == 'cross':
-            pygame.draw.rect(screen, (100, 100, 100), (0, center_y - half_width, center_x, road_width))
-            angles = {'top': self.config['top_angle'], 'right': self.config['right_angle'], 'bottom': self.config['bottom_angle']}
+            # Treat all 4 roads as angled roads to prevent double drawing
+            angles = {
+                'top': self.config['top_angle'],
+                'right': self.config['right_angle'],
+                'bottom': self.config['bottom_angle'],
+                'left': 180  # The left road is always at 180 degrees
+            }
             for name, angle in angles.items():
-                draw_angled_road(screen, center_x, center_y, angle, half_width, 1000)
-        else:
-            pygame.draw.rect(screen, (100, 100, 100), (0, center_y - half_width, 1920, road_width))
-            draw_angled_road(screen, center_x, center_y, self.config['t_angle'], half_width, 1000)
+                draw_angled_road(screen, center_x, center_y, angle, half_width, 1200)
+        else: # T-junction
+            pygame.draw.rect(screen, (100, 100, 100), (0, center_y - half_width, 1920, dims['road_width']))
+            draw_angled_road(screen, center_x, center_y, self.config['t_angle'], half_width, 1200)
     
     def draw_lane_markings(self, screen, center_x=960, center_y=540):
         dims = self.get_road_dimensions()
@@ -255,16 +259,22 @@ def draw_center_divider(screen, start, end, width=12, color=(80, 80, 80)):
     points = [(start[0]-px, start[1]-py), (start[0]+px, start[1]+py), (end[0]+px, end[1]+py), (end[0]-px, end[1]-py)]
     pygame.draw.polygon(screen, color, points)
 
+# --- FIX WAS HERE ---
 def draw_lane_markings(screen, config, cx, cy, dims):
     road_type = config['road_type']
     road_w, total_l, l_per_dir, lane_w = dims['road_width'], dims['total_lanes'], dims['lanes_per_direction'], dims['lane_width']
     
     if config['junction_type'] == 'cross':
-        draw_horizontal_road_markings(screen, cx, cy, road_w, total_l, l_per_dir, lane_w, road_type)
-        angles = {'top': config['top_angle'], 'right': config['right_angle'], 'bottom': config['bottom_angle']}
+        # Treat all 4 roads as angled roads to prevent double drawing
+        angles = {
+            'top': config['top_angle'], 
+            'right': config['right_angle'], 
+            'bottom': config['bottom_angle'], 
+            'left': 180
+        }
         for name, angle in angles.items():
             draw_angled_road_markings(screen, cx, cy, angle, road_w, total_l, l_per_dir, lane_w, road_type)
-    else:
+    else: # T-Junction
         draw_horizontal_road_markings(screen, cx, cy, road_w, total_l, l_per_dir, lane_w, road_type)
         draw_angled_road_markings(screen, cx, cy, config['t_angle'], road_w, total_l, l_per_dir, lane_w, road_type)
 
@@ -277,17 +287,23 @@ def draw_angled_road_markings(screen, cx, cy, angle, road_w, total_l, l_per_dir,
     draw_solid_line(screen, (cx + half_w*px, cy + half_w*py), (cx + half_w*px + length*dx, cy + half_w*py + length*dy))
 
     if '2way' in road_type:
+        center_start = (cx, cy)
+        center_end = (cx + length*dx, cy + length*dy)
         if road_type == '2way_with_divider':
-            draw_center_divider(screen, (cx, cy), (cx+length*dx, cy+dy*length))
+            draw_center_divider(screen, center_start, center_end)
             for offset in [-6, 6]:
-                draw_solid_line(screen, (cx+offset*px, cy+offset*py), (cx+offset*px+length*dx, cy+offset*py+length*dy), 3, (255,255,0))
+                start_p = (cx + offset*px, cy + offset*py)
+                end_p = (start_p[0] + length*dx, start_p[1] + length*dy)
+                draw_solid_line(screen, start_p, end_p, 3, (255,255,0))
         else:
-            draw_solid_line(screen, (cx,cy), (cx+length*dx, cy+length*dy), 3, (255,255,0))
+            draw_solid_line(screen, center_start, center_end, 3, (255,255,0))
 
     for i in range(1, total_l):
         if '2way' in road_type and i == l_per_dir: continue
         offset = i * lane_w - half_w
-        draw_dashed_line(screen, (cx+offset*px, cy+offset*py), (cx+offset*px+length*dx, cy+offset*py+length*dy))
+        start_p = (cx + offset*px, cy + offset*py)
+        end_p = (start_p[0] + length*dx, start_p[1] + length*dy)
+        draw_dashed_line(screen, start_p, end_p)
 
 def draw_horizontal_road_markings(screen, cx, cy, road_w, total_l, l_per_dir, lane_w, road_type):
     half_w = road_w / 2
