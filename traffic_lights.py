@@ -20,111 +20,115 @@ class TrafficLight:
     def __init__(self, intersection_center_x, intersection_center_y, road_config, intersection_size=100):
         self.center_x = intersection_center_x
         self.center_y = intersection_center_y
-        self.intersection_size = intersection_size
         self.road_config = road_config
         self.light_radius = 25
         self.segment_width = 8
         self.road_directions = {}
         self.light_states = {}
         
-        self.green_duration = 15.0 # The 15-second rule
+        # --- REQUIREMENT FULFILLED: Green light lasts 15 seconds ---
+        self.green_duration = 15.0
         self.cycle_start_time = time.time()
         
-        # --- NEW: Logic for 1-by-1 cycling ---
         self.cycle_order = []
         self.current_green_index = 0
-        
         self.colors = { LightState.RED: (255, 50, 50), LightState.GREEN: (50, 255, 50) }
         
-        self.update_road_config(road_config) # Initialize everything
+        self.update_road_config(road_config)
 
     def update_road_config(self, new_road_config):
-        self.road_config = new_road_config
-        self.road_directions = self._get_road_directions_from_config()
-        # --- NEW: Define the order for cycling ---
-        self.cycle_order = ['top', 'right', 'bottom', 'left']
-        # Filter out roads that don't exist in the current junction type
-        self.cycle_order = [name for name in self.cycle_order if name in self.road_directions]
-        self._initialize_light_states()
+        # Check if this is the first time or if we need to reinitialize
+        if not hasattr(self, '_config_hash') or self._should_update_config(new_road_config):
+            self.road_config = new_road_config
+            self.road_directions = self._get_road_directions_from_config()
+            self.cycle_order = ['top', 'right', 'bottom', 'left']
+            self.cycle_order = [name for name in self.cycle_order if name in self.road_directions]
+            self._initialize_light_states()
+            self._config_hash = self._get_config_hash(new_road_config)
+            print(f"Traffic light config updated - timer reset")
+    
+    def _should_update_config(self, new_config):
+        """Check if the config has meaningfully changed"""
+        if not hasattr(self, 'road_config') or not self.road_config:
+            return True
+        
+        # Check key values that would affect traffic lights
+        key_fields = ['junction_type', 'top_angle', 'right_angle', 'bottom_angle']
+        for field in key_fields:
+            if self.road_config.get(field) != new_config.get(field):
+                return True
+        return False
+    
+    def _get_config_hash(self, config):
+        """Get a simple hash of the config for comparison"""
+        key_fields = ['junction_type', 'top_angle', 'right_angle', 'bottom_angle']
+        return hash(tuple(config.get(field) for field in key_fields))
 
-    # traffic_lights.py
     def _get_road_directions_from_config(self):
         directions = {}
         if self.road_config['junction_type'] == 'cross':
-            # It reads the exact angles you set in the GUI!
             directions['top'] = RoadDirection(self.road_config['top_angle'], 'top')
             directions['right'] = RoadDirection(self.road_config['right_angle'], 'right') 
             directions['bottom'] = RoadDirection(self.road_config['bottom_angle'], 'bottom')
-            directions['left'] = RoadDirection((self.road_config['right_angle'] + 180) % 360, 'left')
-        return directions # T-junction logic can be added later
+            # The 'left' road is always 180 degrees from the 'right' road's origin point
+            directions['left'] = RoadDirection(180, 'left')
+        return directions
     
     def _initialize_light_states(self):
         for direction_name in self.road_directions.keys():
             self.light_states[direction_name] = LightState.RED
         
         if self.cycle_order:
-            # Set the first road in the cycle to green
             first_green = self.cycle_order[0]
             self.light_states[first_green] = LightState.GREEN
         self.current_green_index = 0
         self.cycle_start_time = time.time()
     
     def update_timing(self):
-        # --- NEW: Check the mode from the config ---
         mode = self.road_config.get('traffic_light_mode', 'timer')
-
         if mode == 'timer':
             if time.time() - self.cycle_start_time >= self.green_duration:
                 self._switch_light_phases()
                 self.cycle_start_time = time.time()
         elif mode == 'smart':
-            # This is where you will add your smart logic later
             pass
     
     def _switch_light_phases(self):
-        """--- NEW: Implements the '1 by 1' cycling logic ---"""
         if not self.cycle_order: return
-
-        # Turn the current green light RED
         current_green_road = self.cycle_order[self.current_green_index]
         self.light_states[current_green_road] = LightState.RED
-
-        # Move to the next light in the cycle
         self.current_green_index = (self.current_green_index + 1) % len(self.cycle_order)
-        
-        # Turn the new light GREEN
         next_green_road = self.cycle_order[self.current_green_index]
         self.light_states[next_green_road] = LightState.GREEN
 
+    # --- CLEANUP: Removed old angle-based functions for clarity ---
     def is_red_light(self, road_name: str) -> bool:
+        """The one simple, reliable way to check the light status."""
         return self.light_states.get(road_name) == LightState.RED
     
-    def get_light_state_for_direction(self, direction_angle: float) -> LightState:
-        """Get traffic light state for a vehicle traveling at a specific angle"""
-        direction_angle = direction_angle % 360
-        
-        # Find the closest road direction to the vehicle's travel angle
-        closest_direction = None
-        min_angle_diff = float('inf')
-        
-        for direction_name, road_direction in self.road_directions.items():
-            angle_diff = abs(direction_angle - road_direction.angle)
-            # Handle wrap-around (e.g., 350° vs 10°)
-            angle_diff = min(angle_diff, 360 - angle_diff)
-            
-            if angle_diff < min_angle_diff:
-                min_angle_diff = angle_diff
-                closest_direction = direction_name
-        
-        return self.light_states.get(closest_direction, LightState.RED)
+    def get_current_green_direction(self):
+        """Get the name of the currently green direction"""
+        if self.cycle_order and 0 <= self.current_green_index < len(self.cycle_order):
+            return self.cycle_order[self.current_green_index]
+        return None
     
-    def is_red_light_for_angle(self, direction_angle: float) -> bool:
-        """Check if the light is red for a vehicle traveling at a specific angle"""
-        return self.get_light_state_for_direction(direction_angle) == LightState.RED
+    def get_time_until_change(self):
+        """Get remaining time in seconds until next light change"""
+        elapsed = time.time() - self.cycle_start_time
+        remaining = self.green_duration - elapsed
+        return max(0, remaining)
     
-    def is_green_light_for_angle(self, direction_angle: float) -> bool:
-        """Check if the light is green for a vehicle traveling at a specific angle"""
-        return self.get_light_state_for_direction(direction_angle) == LightState.GREEN
+    def get_timer_info(self):
+        """Get comprehensive timer information for display"""
+        current_green = self.get_current_green_direction()
+        time_remaining = self.get_time_until_change()
+        
+        return {
+            'current_green': current_green or 'None',
+            'time_remaining': time_remaining,
+            'cycle_duration': self.green_duration,
+            'cycle_progress': 1.0 - (time_remaining / self.green_duration) if self.green_duration > 0 else 0
+        }
 
     def draw(self, screen):
         pygame.draw.circle(screen, (80, 80, 80), (self.center_x, self.center_y), self.light_radius)
@@ -153,8 +157,7 @@ class TrafficLightManager:
         for light in self.traffic_lights:
             light.draw(screen)
             
-    def get_nearest_traffic_light(self, x, y, max_distance=200) -> Optional[TrafficLight]:
-        # ... (This method is unchanged) ...
+    def get_nearest_traffic_light(self, x, y, max_distance=300) -> Optional[TrafficLight]:
         nearest = None
         min_dist = float('inf')
         for light in self.traffic_lights:
