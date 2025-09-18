@@ -53,6 +53,7 @@ def main():
     running = True
     show_info = True
     show_debug = False
+    show_collision_zones = False
     
     print("\nTraffic Simulation Controls:")
     print("- ESC: Exit")
@@ -60,6 +61,7 @@ def main():
     print("- C: Clear all vehicles")
     print("- I: Toggle info display")
     print("- D: Toggle debug lane visualization")
+    print("- Z: Toggle collision detection zones")
     print("- R: Reset vehicle spawning with current road config")
     print("- GUI window allows real-time road configuration")
     
@@ -93,6 +95,10 @@ def main():
                     # Toggle debug visualization
                     show_debug = not show_debug
                     print(f"Debug visualization: {'ON' if show_debug else 'OFF'}")
+                elif event.key == pygame.K_z:
+                    # Toggle collision zones visualization
+                    show_collision_zones = not show_collision_zones
+                    print(f"Collision zones: {'ON' if show_collision_zones else 'OFF'}")
                 elif event.key == pygame.K_r:
                     # Reset spawning with current road config
                     current_config = road_config.get_current_config()
@@ -122,7 +128,7 @@ def main():
         
         # Draw debug visualization if enabled
         if show_debug:
-            vehicle_spawner.draw_debug_info(screen)
+            vehicle_spawner.draw_debug_info(screen, show_collision_zones)
         
         # Display information
         if show_info:
@@ -140,11 +146,18 @@ def main():
             lane_count = current_config['lane_count']
             road_info = f"Road: {junction_type} Junction | {road_type} | {lane_count} Lanes"
             
+            # Traffic light info
+            if traffic_light_manager.traffic_lights:
+                phase_info, remaining_time = traffic_light_manager.traffic_lights[0].get_current_phase_info()
+                traffic_info = f"Traffic Light: {phase_info} | {remaining_time:.1f}s remaining"
+            else:
+                traffic_info = "Traffic Light: No lights active"
+            
             # Controls reminder
-            controls_info = "Controls: V=Toggle Spawning | C=Clear | I=Toggle Info | D=Debug | R=Reset | ESC=Exit"
+            controls_info = "Controls: V=Toggle Spawning | C=Clear | I=Toggle Info | D=Debug | Z=Collision Zones | R=Reset | ESC=Exit"
             
             # Draw info texts
-            for text in [vehicle_info, road_info, controls_info]:
+            for text in [vehicle_info, road_info, traffic_info, controls_info]:
                 text_surface = font.render(text, True, (255, 255, 255))
                 screen.blit(text_surface, (50, y_offset))
                 y_offset += 40

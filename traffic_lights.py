@@ -28,7 +28,7 @@ class TrafficLight:
         self.light_states = {}
         self._initialize_light_states()
         
-        self.green_duration = 15.0
+        self.green_duration = 10.0  # Changed from 15.0 to 10.0 seconds
         self.cycle_start_time = time.time()
         
         self.colors = {
@@ -66,8 +66,10 @@ class TrafficLight:
             # If top is green, switch to left/right green, and vice-versa
             if self.light_states.get('top') == LightState.GREEN:
                 self.light_states.update({'top': LightState.RED, 'bottom': LightState.RED, 'left': LightState.GREEN, 'right': LightState.GREEN})
+                print("Traffic Light: Switched to East-West GREEN")
             else:
                 self.light_states.update({'top': LightState.GREEN, 'bottom': LightState.GREEN, 'left': LightState.RED, 'right': LightState.RED})
+                print("Traffic Light: Switched to North-South GREEN")
 
     # --- FIX #1: Simplified, direct methods to check light state ---
     def get_light_state_for_road(self, road_name: str) -> Optional[LightState]:
@@ -82,10 +84,28 @@ class TrafficLight:
         """Checks if the light for a specific road is GREEN."""
         return self.get_light_state_for_road(road_name) == LightState.GREEN
     
+    def get_remaining_time(self):
+        """Get the remaining time in seconds for the current light phase"""
+        elapsed_time = time.time() - self.cycle_start_time
+        remaining = self.green_duration - elapsed_time
+        return max(0, remaining)
+    
+    def get_current_phase_info(self):
+        """Get info about current phase for display"""
+        remaining = self.get_remaining_time()
+        if self.light_states.get('top') == LightState.GREEN:
+            current_phase = "North-South GREEN"
+        else:
+            current_phase = "East-West GREEN"
+        return current_phase, remaining
+    
     def update_road_config(self, new_road_config):
-        self.road_config = new_road_config
-        self.road_directions = self._get_road_directions_from_config()
-        self._initialize_light_states()
+        # Only update if the config has actually changed
+        if self.road_config != new_road_config:
+            self.road_config = new_road_config
+            self.road_directions = self._get_road_directions_from_config()
+            self._initialize_light_states()
+            self.cycle_start_time = time.time()  # Reset timing when config changes
         
     def draw(self, screen):
         pygame.draw.circle(screen, (80, 80, 80), (int(self.center_x), int(self.center_y)), self.light_radius)
