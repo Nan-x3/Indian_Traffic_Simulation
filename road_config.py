@@ -66,9 +66,13 @@ class ConfigPanel:
         cross_frame = ttk.Frame(self.angle_frame)
         cross_frame.pack(fill="x", pady=5)
         ttk.Label(cross_frame, text="Cross Junction - Individual Road Angles:").pack(anchor="w")
-        self.create_angle_control(cross_frame, "Top Road", "top_angle", 90)
-        self.create_angle_control(cross_frame, "Right Road", "right_angle", 0)
-        self.create_angle_control(cross_frame, "Bottom Road", "bottom_angle", 270)
+
+        # --- THE FIX IS HERE ---
+        # Fixed the GUI labels to match pygame coordinate system
+        # In pygame: 0°=right, 90°=down, 180°=left, 270°=up
+        self.create_angle_control(cross_frame, "Top Road (270° = up)",    "top_angle",    270)     # UP
+        self.create_angle_control(cross_frame, "Right Road (0° = right)", "right_angle",  0)       # RIGHT
+        self.create_angle_control(cross_frame, "Bottom Road (90° = down)", "bottom_angle", 90)     # DOWN
     
     def setup_lane_controls(self):
         self.lane_frame = ttk.LabelFrame(self.window, text="Lane Configuration", padding=10)
@@ -102,13 +106,10 @@ class ConfigPanel:
         self.junction_type.trace_add("write", self.update_display)
         self.traffic_light_mode.trace_add("write", self.update_display)
         
-        self.t_angle_entry.bind('<Return>', self.validate_t_angle)
-        self.top_angle_entry.bind('<Return>', lambda e: self.validate_angle(e, self.top_angle))
-        self.right_angle_entry.bind('<Return>', lambda e: self.validate_angle(e, self.right_angle))
-        self.bottom_angle_entry.bind('<Return>', lambda e: self.validate_angle(e, self.bottom_angle))
-        
-    def validate_t_angle(self, event=None):
-        self.validate_angle(self.t_angle, 30, 150)
+        self.t_angle_entry.bind('<Return>', lambda e: self.validate_angle(self.t_angle, 30, 150))
+        self.top_angle_entry.bind('<Return>', lambda e: self.validate_angle(self.top_angle))
+        self.right_angle_entry.bind('<Return>', lambda e: self.validate_angle(self.right_angle))
+        self.bottom_angle_entry.bind('<Return>', lambda e: self.validate_angle(self.bottom_angle))
     
     def validate_angle(self, var, min_val=0, max_val=360):
         try:
@@ -171,8 +172,8 @@ class RoadRenderer:
     @staticmethod
     def get_default_config():
         return {
-            'junction_type': 'cross', 't_angle': 90, 'top_angle': 90,
-            'right_angle': 0, 'bottom_angle': 270, 'road_type': '2way_with_divider',
+            'junction_type': 'cross', 't_angle': 90, 'top_angle': 270,
+            'right_angle': 0, 'bottom_angle': 90, 'road_type': '2way_with_divider',
             'lane_count': 2, 'traffic_light_mode': 'timer'
         }
     
@@ -187,22 +188,19 @@ class RoadRenderer:
         return {'lane_width': lane_width, 'total_lanes': total_lanes, 'road_width': road_width,
                 'lanes_per_direction': lanes_per_dir, 'road_half_width': road_width // 2}
     
-    # --- FIX WAS HERE ---
     def draw_roads(self, screen, center_x=960, center_y=540):
         dims = self.get_road_dimensions()
         half_width = dims['road_half_width']
-        
         if self.config['junction_type'] == 'cross':
-            # Treat all 4 roads as angled roads to prevent double drawing
             angles = {
-                'top': self.config['top_angle'],
+                'top': self.config['top_angle'], 
                 'right': self.config['right_angle'],
-                'bottom': self.config['bottom_angle'],
-                'left': 180  # The left road is always at 180 degrees
+                'bottom': self.config['bottom_angle'], 
+                'left': 180  # Fixed at 180° - independent of right road
             }
             for name, angle in angles.items():
                 draw_angled_road(screen, center_x, center_y, angle, half_width, 1200)
-        else: # T-junction
+        else:
             pygame.draw.rect(screen, (100, 100, 100), (0, center_y - half_width, 1920, dims['road_width']))
             draw_angled_road(screen, center_x, center_y, self.config['t_angle'], half_width, 1200)
     
@@ -259,22 +257,16 @@ def draw_center_divider(screen, start, end, width=12, color=(80, 80, 80)):
     points = [(start[0]-px, start[1]-py), (start[0]+px, start[1]+py), (end[0]+px, end[1]+py), (end[0]-px, end[1]-py)]
     pygame.draw.polygon(screen, color, points)
 
-# --- FIX WAS HERE ---
 def draw_lane_markings(screen, config, cx, cy, dims):
     road_type = config['road_type']
     road_w, total_l, l_per_dir, lane_w = dims['road_width'], dims['total_lanes'], dims['lanes_per_direction'], dims['lane_width']
     
     if config['junction_type'] == 'cross':
-        # Treat all 4 roads as angled roads to prevent double drawing
-        angles = {
-            'top': config['top_angle'], 
-            'right': config['right_angle'], 
-            'bottom': config['bottom_angle'], 
-            'left': 180
-        }
+        angles = {'top': config['top_angle'], 'right': config['right_angle'],
+                  'bottom': config['bottom_angle'], 'left': 180}
         for name, angle in angles.items():
             draw_angled_road_markings(screen, cx, cy, angle, road_w, total_l, l_per_dir, lane_w, road_type)
-    else: # T-Junction
+    else:
         draw_horizontal_road_markings(screen, cx, cy, road_w, total_l, l_per_dir, lane_w, road_type)
         draw_angled_road_markings(screen, cx, cy, config['t_angle'], road_w, total_l, l_per_dir, lane_w, road_type)
 
